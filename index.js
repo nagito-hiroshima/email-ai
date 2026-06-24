@@ -616,11 +616,12 @@ async function sendDiscordWebhook(env, data) {
     embed.fields.push({ name: "注意点", value: truncate(sections["注意点"], 800), inline: false });
   }
 
-  // 常に表示する送り元/宛先（最後に）
-  embed.fields.push(
-    { name: "From", value: truncate(data.from || "不明", 1000) || "不明", inline: false },
-    { name: "To", value: truncate(data.to || "不明", 1000) || "不明", inline: false }
-  );
+  // 常に表示する送り元（最後に）
+  embed.fields.push({
+    name: "From",
+    value: truncate(data.from || "不明", 1000) || "不明",
+    inline: false,
+  });
 
   const payload = {
     content: "📩 **新着メールを要約しました**",
