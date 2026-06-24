@@ -1,0 +1,9 @@
+name = "email-summary-discord-worker"
+main = "index.js"
+compatibility_date = "2026-06-24"
+
+[vars]
+AI_MODEL = "@cf/openai/gpt-oss-120b"
+
+[ai]
+binding = "AI"
