@@ -551,82 +551,74 @@ async function sendDiscordWebhook(env, data) {
     throw new Error("DISCORD_WEBHOOK_URL が設定されていません。");
   }
 
-  function extractField(summary, key) {
+  // シンプルなフィールド抽出（単一行形式を優先）
+  function extractFieldLines(summary, keyVariants) {
     if (!summary) return "";
     const lines = summary.split(/\r?\n/).map(l => l.trim());
     for (const line of lines) {
-      const m = line.match(new RegExp(`^-?\\s*${key}\\s*:\\s*(.+)$`, "i"));
-      if (m) return m[1].trim();
+      for (const key of keyVariants) {
+        const m = line.match(new RegExp(`^-?\\s*${key}\\s*:\\s*(.+)$`, "i"));
+        if (m) return m[1].trim();
+      }
     }
     return "";
   }
 
   const fullSummary = String(data.summary || "要約なし").trim();
-  const shortSummary =
-    fullSummary.split(/\r?\n/)[0] || truncate(fullSummary, 200);
+  const shortSummary = fullSummary.split(/\r?\n/)[0] || truncate(fullSummary, 200);
 
-  const importance = extractField(fullSummary, "重要度") || extractField(fullSummary, "重要度");
-  const needsAction = extractField(fullSummary, "対応が必要か") || extractField(fullSummary, "対応が必要");
-  const deadline = extractField(fullSummary, "期限・日時") || extractField(fullSummary, "期限");
+  // 抽出キー（複数バリエーション対応）
+  const keys = {
+    "概要": ["概要"],
+    "重要度": ["重要度"],
+    "対応が必要か": ["対応が必要か", "対応が必要"],
+    "期限・日時": ["期限・日時", "期限"],
+    "返信方針": ["返信が必要な場合の返信方針", "返信方針"],
+    "注意点": ["注意点"]
+  };
+
+  const sections = {};
+  for (const k of Object.keys(keys)) {
+    sections[k] = extractFieldLines(fullSummary, keys[k]) || "";
+  }
 
   const embed = {
     title: truncate(data.subject || "(件名なし)", 250),
-    description: truncate(fullSummary, 1800),
+    description: truncate(shortSummary || "(要約なし)", 1024),
     color: 0x5865f2,
-    fields: [
-      {
-        name: "概要",
-        value: truncate(shortSummary || "(要約なし)", 1024),
-        inline: false,
-      },
-    ],
+    fields: [],
     timestamp: new Date().toISOString(),
-    footer: {
-      text: "Email Summary · Cloudflare Worker",
-    },
+    footer: { text: "Email Summary · Cloudflare Worker" },
   };
 
-  if (importance) {
-    embed.fields.push({
-      name: "重要度",
-      value: truncate(importance, 250),
-      inline: true,
-    });
+  // 順序を保ってフィールド追加（空でなければ追加）
+  if (sections["概要"]) {
+    embed.fields.push({ name: "概要（要点）", value: truncate(sections["概要"], 1024), inline: false });
+  }
+  if (sections["重要度"]) {
+    embed.fields.push({ name: "重要度", value: truncate(sections["重要度"], 250), inline: true });
+  }
+  if (sections["対応が必要か"]) {
+    embed.fields.push({ name: "対応が必要か", value: truncate(sections["対応が必要か"], 250), inline: true });
+  }
+  if (sections["期限・日時"]) {
+    embed.fields.push({ name: "期限・日時", value: truncate(sections["期限・日時"], 250), inline: true });
+  }
+  if (sections["返信方針"]) {
+    embed.fields.push({ name: "返信方針", value: truncate(sections["返信方針"], 600), inline: false });
+  }
+  if (sections["注意点"]) {
+    embed.fields.push({ name: "注意点", value: truncate(sections["注意点"], 800), inline: false });
   }
 
-  if (needsAction) {
-    embed.fields.push({
-      name: "対応が必要か",
-      value: truncate(needsAction, 250),
-      inline: true,
-    });
-  }
-
-  if (deadline) {
-    embed.fields.push({
-      name: "期限・日時",
-      value: truncate(deadline, 250),
-      inline: true,
-    });
-  }
-
-  // 常に表示する送り元/宛先
+  // 常に表示する送り元/宛先（最後に）
   embed.fields.push(
-    {
-      name: "From",
-      value: truncate(data.from || "不明", 1000) || "不明",
-      inline: false,
-    },
-    {
-      name: "To",
-      value: truncate(data.to || "不明", 1000) || "不明",
-      inline: false,
-    }
+    { name: "From", value: truncate(data.from || "不明", 1000) || "不明", inline: false },
+    { name: "To", value: truncate(data.to || "不明", 1000) || "不明", inline: false }
   );
 
   const payload = {
-    content:
-      "📩 **新着メールを要約しました**",
+    content: "📩 **新着メールを要約しました**",
     embeds: [embed],
     allowed_mentions: { parse: [] },
   };
