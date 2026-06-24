@@ -582,9 +582,14 @@ async function sendDiscordWebhook(env, data) {
     sections[k] = extractFieldLines(fullSummary, keys[k]) || "";
   }
 
+  // description が "概要" と重複しないように調整
+  const description = sections["概要"]
+    ? truncate(data.subject || shortSummary || "(要約なし)", 1024)
+    : truncate(shortSummary || "(要約なし)", 1024);
+  
   const embed = {
     title: truncate(data.subject || "(件名なし)", 250),
-    description: truncate(shortSummary || "(要約なし)", 1024),
+    description: description,
     color: 0x5865f2,
     fields: [],
     timestamp: new Date().toISOString(),
