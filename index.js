@@ -551,37 +551,89 @@ async function sendDiscordWebhook(env, data) {
     throw new Error("DISCORD_WEBHOOK_URL が設定されていません。");
   }
 
-  const payload = {
-    content: "📩 **Cloudflare Email Routingで新着メールを受信しました**",
-    embeds: [
+  function extractField(summary, key) {
+    if (!summary) return "";
+    const lines = summary.split(/\r?\n/).map(l => l.trim());
+    for (const line of lines) {
+      const m = line.match(new RegExp(`^-?\\s*${key}\\s*:\\s*(.+)$`, "i"));
+      if (m) return m[1].trim();
+    }
+    return "";
+  }
+
+  const fullSummary = String(data.summary || "要約なし").trim();
+  const shortSummary =
+    fullSummary.split(/\r?\n/)[0] || truncate(fullSummary, 200);
+
+  const importance = extractField(fullSummary, "重要度") || extractField(fullSummary, "重要度");
+  const needsAction = extractField(fullSummary, "対応が必要か") || extractField(fullSummary, "対応が必要");
+  const deadline = extractField(fullSummary, "期限・日時") || extractField(fullSummary, "期限");
+
+  const embed = {
+    title: truncate(data.subject || "(件名なし)", 250),
+    description: truncate(fullSummary, 1800),
+    color: 0x5865f2,
+    fields: [
       {
-        title: truncate(data.subject || "(件名なし)", 250),
-        description: truncate(data.summary || "要約なし", 3900),
-        fields: [
-          {
-            name: "From",
-            value: truncate(data.from || "不明", 1000) || "不明",
-            inline: false,
-          },
-          {
-            name: "To",
-            value: truncate(data.to || "不明", 1000) || "不明",
-            inline: false,
-          },
-        ],
-        timestamp: new Date().toISOString(),
+        name: "概要",
+        value: truncate(shortSummary || "(要約なし)", 1024),
+        inline: false,
       },
     ],
-    allowed_mentions: {
-      parse: [],
+    timestamp: new Date().toISOString(),
+    footer: {
+      text: "Email Summary · Cloudflare Worker",
     },
+  };
+
+  if (importance) {
+    embed.fields.push({
+      name: "重要度",
+      value: truncate(importance, 250),
+      inline: true,
+    });
+  }
+
+  if (needsAction) {
+    embed.fields.push({
+      name: "対応が必要か",
+      value: truncate(needsAction, 250),
+      inline: true,
+    });
+  }
+
+  if (deadline) {
+    embed.fields.push({
+      name: "期限・日時",
+      value: truncate(deadline, 250),
+      inline: true,
+    });
+  }
+
+  // 常に表示する送り元/宛先
+  embed.fields.push(
+    {
+      name: "From",
+      value: truncate(data.from || "不明", 1000) || "不明",
+      inline: false,
+    },
+    {
+      name: "To",
+      value: truncate(data.to || "不明", 1000) || "不明",
+      inline: false,
+    }
+  );
+
+  const payload = {
+    content:
+      "📩 **新着メールを要約しました** — 要約の先頭を確認してください。詳細は埋め込み内に表示されます。",
+    embeds: [embed],
+    allowed_mentions: { parse: [] },
   };
 
   const response = await fetch(env.DISCORD_WEBHOOK_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
 
