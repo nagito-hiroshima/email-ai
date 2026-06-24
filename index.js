@@ -626,7 +626,7 @@ async function sendDiscordWebhook(env, data) {
 
   const payload = {
     content:
-      "📩 **新着メールを要約しました** — 要約の先頭を確認してください。詳細は埋め込み内に表示されます。",
+      "📩 **新着メールを要約しました**",
     embeds: [embed],
     allowed_mentions: { parse: [] },
   };
